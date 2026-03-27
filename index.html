@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake & Ladder — Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e1a;--surface:#111827;--surface2:#1a2236;--border:#2a3450;
+  --text:#e2e8f0;--text-dim:#8892a8;--accent:#6366f1;--accent-glow:#818cf8;
+  --snake:#f43f5e;--snake-glow:#fb7185;--ladder:#10b981;--ladder-glow:#34d399;
+  --reward:#f59e0b;--reward-glow:#fbbf24;--final:#a855f7;--final-glow:#c084fc;
+  --tile-size:48px;
+}
+html{font-family:'Fredoka',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+body{min-height:100vh;display:flex;flex-direction:column}
+.app{display:grid;grid-template-columns:300px 1fr 340px;gap:0;min-height:100vh}
+@media(max-width:1200px){.app{grid-template-columns:260px 1fr 300px}}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* PANELS */
+.panel{background:var(--surface);border-right:1px solid var(--border);padding:20px;overflow-y:auto;max-height:100vh}
+.panel:last-child{border-right:none;border-left:1px solid var(--border)}
+.panel h2{font-size:14px;text-transform:uppercase;letter-spacing:2px;color:var(--accent-glow);margin-bottom:16px;font-weight:600}
+.panel h3{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin:20px 0 10px;font-weight:500}
+
+/* FORM */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;font-family:'IBM Plex Mono',monospace}
+.field input,.field select{width:100%;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:13px;outline:none;transition:border .2s}
+.field input:focus,.field select:focus{border-color:var(--accent)}
+.field input[type=range]{padding:0;margin-top:4px;accent-color:var(--accent)}
+.range-val{float:right;color:var(--accent-glow);font-family:'IBM Plex Mono',monospace;font-size:12px}
+
+button{font-family:'Fredoka',sans-serif;cursor:pointer;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff;width:100%}
+.btn-primary:hover{background:var(--accent-glow);transform:translateY(-1px);box-shadow:0 4px 20px rgba(99,102,241,.3)}
+.btn-danger{background:var(--snake);color:#fff;width:100%}
+.btn-danger:hover{background:var(--snake-glow)}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);width:100%}
+.btn-secondary:hover{border-color:var(--accent)}
+.btn-sm{padding:6px 10px;font-size:11px}
+.btn-group{display:flex;gap:8px;margin-top:10px}
+.btn-group button{flex:1}
+
+/* CENTER */
+.center{display:flex;flex-direction:column;align-items:center;padding:20px;overflow:hidden}
+.center h1{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent-glow),var(--final-glow),var(--reward-glow));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px;letter-spacing:1px}
+.center .subtitle{font-size:11px;color:var(--text-dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:16px}
+
+/* BOARD */
+.board-wrapper{position:relative;margin-bottom:16px;flex-shrink:0}
+.board{display:inline-grid;gap:2px;background:var(--surface2);padding:3px;border-radius:10px;border:1px solid var(--border);box-shadow:0 8px 40px rgba(0,0,0,.4)}
+.tile{
+  width:var(--tile-size);height:var(--tile-size);
+  background:var(--surface);border-radius:4px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim);
+  position:relative;cursor:pointer;transition:all .15s;user-select:none;
+}
+.tile:hover{background:var(--surface2);transform:scale(1.05);z-index:2}
+.tile .num{font-size:9px;opacity:.5;position:absolute;top:2px;left:4px}
+.tile.snake{background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.3)}
+.tile.snake::after{content:'🐍';font-size:16px}
+.tile.ladder{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3)}
+.tile.ladder::after{content:'🪜';font-size:16px}
+.tile.reward{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3)}
+.tile.reward::after{content:'🎁';font-size:16px}
+.tile.reward.claimed{background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.5)}
+.tile.reward.claimed::after{content:'💎';font-size:16px}
+.tile.final{background:rgba(168,85,247,.2);border:1px solid rgba(168,85,247,.4)}
+.tile.final::after{content:'🏆';font-size:18px}
+.tile.start{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3)}
+.tile.start::after{content:'🚀';font-size:14px}
+.tile .dest-tag{position:absolute;bottom:1px;right:2px;font-size:7px;font-weight:700;font-family:'IBM Plex Mono',monospace}
+.tile.snake .dest-tag{color:var(--snake)}
+.tile.ladder .dest-tag{color:var(--ladder)}
+
+/* Player token */
+.player-token{
+  position:absolute;width:20px;height:20px;
+  background:var(--accent);border-radius:50%;
+  box-shadow:0 0 12px var(--accent-glow),0 0 4px var(--accent);
+  transition:all .35s cubic-bezier(.4,0,.2,1);
+  z-index:10;pointer-events:none;
+}
+
+/* SVG overlay (unused) */
+.board-svg{display:none}
+
+/* REWARD CLAIM ANIMATION */
+.reward-burst{position:absolute;pointer-events:none;z-index:20}
+.reward-burst .particle{
+  position:absolute;width:8px;height:8px;border-radius:50%;
+  animation:burstOut .7s cubic-bezier(.2,.8,.3,1) forwards;
+  opacity:0;
+}
+@keyframes burstOut{
+  0%{transform:translate(0,0) scale(1);opacity:1}
+  60%{opacity:1}
+  100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0}
+}
+.reward-ring{
+  position:absolute;width:10px;height:10px;border-radius:50%;
+  border:3px solid var(--reward-glow);
+  animation:ringExpand .6s ease-out forwards;
+  transform:translate(-50%,-50%);
+}
+@keyframes ringExpand{
+  0%{width:10px;height:10px;opacity:1}
+  100%{width:60px;height:60px;opacity:0}
+}
+.reward-text{
+  position:absolute;font-family:'Fredoka',sans-serif;font-size:16px;font-weight:700;
+  color:var(--reward-glow);white-space:nowrap;
+  animation:floatUp .9s ease-out forwards;
+  text-shadow:0 0 8px rgba(245,158,11,.5);
+  transform:translate(-50%,-50%);
+}
+@keyframes floatUp{
+  0%{opacity:1;transform:translate(-50%,0) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-40px) scale(1.3)}
+}
+
+/* FINAL TILE CELEBRATION */
+.confetti-piece{
+  position:fixed;width:8px;height:12px;border-radius:2px;
+  animation:confettiFall var(--duration) cubic-bezier(.2,.4,.6,1) forwards;
+  z-index:100;pointer-events:none;
+}
+@keyframes confettiFall{
+  0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}
+  20%{opacity:1}
+  100%{transform:translateY(var(--fall)) rotate(var(--spin)) scale(0.5);opacity:0}
+}
+.trophy-flash{
+  position:fixed;top:0;left:0;width:100vw;height:100vh;
+  background:radial-gradient(circle,rgba(168,85,247,.15) 0%,transparent 70%);
+  z-index:99;pointer-events:none;
+  animation:flashFade .8s ease-out forwards;
+}
+@keyframes flashFade{0%{opacity:1}100%{opacity:0}}
+.win-text{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0);
+  font-family:'Fredoka',sans-serif;font-size:42px;font-weight:700;
+  color:var(--final-glow);z-index:101;pointer-events:none;
+  text-shadow:0 0 30px rgba(168,85,247,.6),0 0 60px rgba(168,85,247,.3);
+  animation:winPop .8s cubic-bezier(.2,1,.3,1) forwards;
+}
+@keyframes winPop{
+  0%{transform:translate(-50%,-50%) scale(0);opacity:0}
+  50%{transform:translate(-50%,-50%) scale(1.2);opacity:1}
+  100%{transform:translate(-50%,-50%) scale(1);opacity:0}
+}
+
+/* DICE */
+.dice-area{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+.dice{
+  width:56px;height:56px;background:var(--surface);border:2px solid var(--border);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:28px;font-weight:700;color:var(--accent-glow);
+  font-family:'IBM Plex Mono',monospace;
+  transition:transform .15s;
+}
+.dice.rolling{animation:diceRoll .12s infinite alternate}
+@keyframes diceRoll{0%{transform:rotate(-8deg) scale(1.05)}100%{transform:rotate(8deg) scale(.95)}}
+.game-controls{display:flex;gap:8px}
+
+/* EDIT MODE */
+.edit-bar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.edit-bar .edit-btn{padding:6px 12px;font-size:11px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text);cursor:pointer;transition:all .15s}
+.edit-bar .edit-btn:hover,.edit-bar .edit-btn.active{border-color:var(--accent);color:var(--accent-glow)}
+.edit-bar .edit-btn.active-snake{border-color:var(--snake);color:var(--snake-glow)}
+.edit-bar .edit-btn.active-ladder{border-color:var(--ladder);color:var(--ladder-glow)}
+.edit-bar .edit-btn.active-reward{border-color:var(--reward);color:var(--reward-glow)}
+.edit-bar .edit-btn.active-remove{border-color:#ef4444;color:#f87171}
+
+/* LOG */
+.log{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);flex:1;min-height:60px;overflow-y:auto;background:var(--surface2);border-radius:8px;padding:10px;width:100%;line-height:1.6}
+.log .snake-msg{color:var(--snake-glow)}
+.log .ladder-msg{color:var(--ladder-glow)}
+.log .reward-msg{color:var(--reward-glow)}
+.log .final-msg{color:var(--final-glow);font-weight:600}
+
+/* STATS */
+.stat-card{background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:10px;border:1px solid var(--border)}
+.stat-card .stat-title{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.stat-card .stat-value{font-size:22px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--accent-glow)}
+.stat-card .stat-sub{font-size:10px;color:var(--text-dim);margin-top:2px;font-family:'IBM Plex Mono',monospace}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* HISTOGRAM */
+.histogram{margin-top:8px}
+.histogram .bar-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-dim)}
+.histogram .bar-label{width:40px;text-align:right;flex-shrink:0}
+.histogram .bar-track{flex:1;height:14px;background:var(--surface);border-radius:3px;overflow:hidden}
+.histogram .bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.histogram .bar-pct{width:36px;flex-shrink:0}
+
+/* REWARD TABLE */
+.reward-table{width:100%;font-family:'IBM Plex Mono',monospace;font-size:11px;border-collapse:collapse}
+.reward-table th{text-align:left;color:var(--text-dim);font-weight:500;padding:4px 6px;border-bottom:1px solid var(--border);font-size:10px}
+.reward-table td{padding:4px 6px;border-bottom:1px solid rgba(42,52,80,.4)}
+.reward-table .pct{color:var(--reward-glow)}
+
+/* SIM PROGRESS */
+.sim-progress{width:100%;height:4px;background:var(--surface2);border-radius:2px;margin:8px 0;overflow:hidden}
+.sim-progress .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--final));border-radius:2px;transition:width .1s}
+
+/* LEGEND */
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;font-size:11px}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:10px;height:10px;border-radius:3px}
+
+/* DISTRIBUTION CHART (canvas) */
+canvas.chart{width:100%;height:120px;border-radius:6px;background:var(--surface2);margin-top:6px}
+
+/* BOARD ROW: board + side stats */
+.board-row{display:flex;gap:14px;align-items:flex-start;flex-shrink:0}
+.game-stats{display:flex;flex-direction:column;gap:10px;min-width:80px}
+.gs-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center}
+.gs-label{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin-bottom:4px}
+.gs-value{font-size:20px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--accent-glow)}
+
+.empty-state{text-align:center;color:var(--text-dim);font-size:12px;padding:40px 20px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT PANEL: CONFIG -->
+  <div class="panel" id="configPanel">
+    <h2>Configuration</h2>
+
+    <div class="field">
+      <label>Board Width <span class="range-val" id="widthVal">10</span></label>
+      <input type="range" id="boardWidth" min="3" max="20" value="10">
+    </div>
+    <div class="field">
+      <label>Board Height <span class="range-val" id="heightVal">10</span></label>
+      <input type="range" id="boardHeight" min="3" max="20" value="10">
+    </div>
+    <div class="field">
+      <label>Rewards Quantity</label>
+      <input type="number" id="rewardsQty" min="0" max="50" value="5">
+    </div>
+    <div class="field">
+      <label>Target Rewards Per Run (median)</label>
+      <input type="number" id="targetRewards" min="0" max="50" value="3" step="1">
+    </div>
+    <div class="field">
+      <label>Target Avg Rolls (median)</label>
+      <input type="number" id="targetRolls" min="1" max="500" value="30" step="1">
+    </div>
+    <div class="field">
+      <label>Simulation Sample Size</label>
+      <select id="sampleSize">
+        <option value="10000">10,000</option>
+        <option value="20000">20,000</option>
+        <option value="50000" selected>50,000</option>
+        <option value="100000">100,000</option>
+        <option value="300000">300,000</option>
+        <option value="500000">500,000</option>
+        <option value="1000000">1,000,000</option>
+        <option value="2000000">2,000,000</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" id="applyBtn" style="margin-bottom:10px">Apply Settings & Generate Board</button>
+
+    <div class="btn-group" style="margin-bottom:10px">
+      <button class="btn-secondary btn-sm" id="exportBtn">📤 Export Board</button>
+      <button class="btn-secondary btn-sm" id="importBtn">📥 Import Board</button>
+    </div>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+
+    <h3>Board Legend</h3>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--snake)"></div>Snake</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--ladder)"></div>Ladder</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--reward)"></div>Reward</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--final)"></div>Final</div>
+    </div>
+  </div>
+
+  <!-- CENTER: BOARD + GAME -->
+  <div class="center" id="centerArea">
+    <h1>Snake & Ladder</h1>
+    <div class="subtitle">Configurable Board Game & Simulator</div>
+
+    <div class="dice-area">
+      <div class="dice" id="dice">-</div>
+      <div class="game-controls">
+        <button class="btn-primary btn-sm" id="rollBtn">🎲 Roll Dice</button>
+        <button class="btn-secondary btn-sm" id="autoBtn">⚡ Auto Roll</button>
+        <button class="btn-secondary btn-sm" id="resetBtn">🔄 New Game</button>
+      </div>
+    </div>
+
+    <div class="board-row">
+      <div class="board-wrapper" id="boardWrapper">
+        <div class="board" id="board"></div>
+        <svg class="board-svg" id="boardSvg"></svg>
+        <div class="player-token" id="playerToken" style="display:none"></div>
+      </div>
+      <div class="game-stats" id="gameStats">
+        <div class="gs-item"><div class="gs-label">Rolls</div><div class="gs-value" id="gsRolls">0</div></div>
+        <div class="gs-item"><div class="gs-label">Rewards</div><div class="gs-value" id="gsRewards">0 / 0</div></div>
+      </div>
+    </div>
+
+    <div class="log" id="log">Click "Apply Settings" to generate a board.</div>
+  </div>
+
+  <!-- RIGHT PANEL: STATS -->
+  <div class="panel" id="statsPanel">
+    <h2>Simulation</h2>
+    <div class="field" style="margin-bottom:8px">
+      <label>Sample Size</label>
+      <select id="sampleSize2">
+        <option value="10000">10,000</option>
+        <option value="20000">20,000</option>
+        <option value="50000" selected>50,000</option>
+        <option value="100000">100,000</option>
+        <option value="300000">300,000</option>
+        <option value="500000">500,000</option>
+        <option value="1000000">1,000,000</option>
+        <option value="2000000">2,000,000</option>
+      </select>
+    </div>
+    <button class="btn-secondary" id="simBtn" style="margin-bottom:8px">Run Simulation</button>
+    <div class="sim-progress" id="simProgress" style="display:none"><div class="fill" id="simFill"></div></div>
+    <div id="simStatus" style="font-size:11px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;margin-bottom:12px"></div>
+
+    <h3>Board Edit Mode</h3>
+    <p style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Select a tool, then click tiles on the board.</p>
+    <div class="edit-bar" id="editBar">
+      <button class="edit-btn" data-tool="snake">🐍 Snake</button>
+      <button class="edit-btn" data-tool="ladder">🪜 Ladder</button>
+      <button class="edit-btn" data-tool="reward">💎 Reward</button>
+      <button class="edit-btn" data-tool="remove">❌ Remove</button>
+    </div>
+    <div id="editHint" style="font-size:10px;color:var(--text-dim);font-family:'IBM Plex Mono',monospace;min-height:28px;margin-top:4px;margin-bottom:16px"></div>
+
+    <h3>Statistics</h3>
+    <div id="statsContent">
+      <div class="empty-state">Run a simulation to see statistics here.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+const S = {
+  width: 10, height: 10,
+  totalTiles: 100,
+  snakes: {},    // {from: to} where from > to
+  ladders: {},   // {from: to} where from < to
+  rewards: new Set(),
+  rewardsQty: 5,
+  targetRewards: 3,
+  targetRolls: 30,
+  sampleSize: 50000,
+  playerPos: 0,
+  playerRewards: new Set(),
+  gameOver: false,
+  autoRolling: false,
+  editTool: null,
+  editStep: null, // for snake/ladder: {from: N}
+  simResults: null,
+};
+
+// ── DOM refs ──
+const $ = id => document.getElementById(id);
+const boardEl = $('board'), svgEl = $('boardSvg'), tokenEl = $('playerToken');
+const diceEl = $('dice'), logEl = $('log');
+
+// ── CONFIG SLIDERS ──
+$('boardWidth').oninput = e => $('widthVal').textContent = e.target.value;
+$('boardHeight').oninput = e => $('heightVal').textContent = e.target.value;
+
+// ── SYNC SAMPLE SIZE SELECTS ──
+$('sampleSize').onchange = e => { $('sampleSize2').value = e.target.value; };
+$('sampleSize2').onchange = e => { $('sampleSize').value = e.target.value; };
+
+// ── SAVE / LOAD STATE (localStorage) ──
+function saveState() {
+  const data = {
+    width: S.width, height: S.height, totalTiles: S.totalTiles,
+    rewardsQty: S.rewardsQty, targetRewards: S.targetRewards,
+    targetRolls: S.targetRolls, sampleSize: S.sampleSize,
+    snakes: S.snakes, ladders: S.ladders, rewards: [...S.rewards],
+  };
+  localStorage.setItem('snl_state', JSON.stringify(data));
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('snl_state');
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    S.width = d.width; S.height = d.height; S.totalTiles = d.totalTiles;
+    S.rewardsQty = d.rewardsQty; S.targetRewards = d.targetRewards;
+    S.targetRolls = d.targetRolls; S.sampleSize = d.sampleSize;
+    S.snakes = d.snakes || {}; S.ladders = d.ladders || {};
+    S.rewards = new Set(d.rewards || []);
+    // Sync UI inputs
+    $('boardWidth').value = S.width; $('widthVal').textContent = S.width;
+    $('boardHeight').value = S.height; $('heightVal').textContent = S.height;
+    $('rewardsQty').value = S.rewardsQty;
+    $('targetRewards').value = S.targetRewards;
+    $('targetRolls').value = S.targetRolls;
+    $('sampleSize').value = S.sampleSize;
+    $('sampleSize2').value = S.sampleSize;
+    return true;
+  } catch { return false; }
+}
+
+// ── EXPORT / IMPORT BOARD ──
+$('exportBtn').onclick = () => {
+  const data = {
+    width: S.width, height: S.height, totalTiles: S.totalTiles,
+    rewardsQty: S.rewardsQty, targetRewards: S.targetRewards,
+    targetRolls: S.targetRolls, sampleSize: S.sampleSize,
+    snakes: S.snakes, ladders: S.ladders, rewards: [...S.rewards],
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `snl-board-${S.width}x${S.height}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      S.width = d.width; S.height = d.height; S.totalTiles = d.totalTiles;
+      S.rewardsQty = d.rewardsQty; S.targetRewards = d.targetRewards;
+      S.targetRolls = d.targetRolls; S.sampleSize = d.sampleSize;
+      S.snakes = d.snakes || {}; S.ladders = d.ladders || {};
+      S.rewards = new Set(d.rewards || []);
+      // Sync UI
+      $('boardWidth').value = S.width; $('widthVal').textContent = S.width;
+      $('boardHeight').value = S.height; $('heightVal').textContent = S.height;
+      $('rewardsQty').value = S.rewardsQty;
+      $('targetRewards').value = S.targetRewards;
+      $('targetRolls').value = S.targetRolls;
+      $('sampleSize').value = S.sampleSize;
+      $('sampleSize2').value = S.sampleSize;
+      resetGame();
+      renderBoard();
+      saveState();
+      logEl.innerHTML = `Imported board ${S.width}×${S.height} from ${file.name}`;
+    } catch { logEl.innerHTML = 'Failed to import — invalid file.'; }
+  };
+  reader.readAsText(file);
+  e.target.value = ''; // reset so same file can be re-imported
+};
+
+// ── APPLY SETTINGS ──
+$('applyBtn').onclick = () => {
+  S.width = +$('boardWidth').value;
+  S.height = +$('boardHeight').value;
+  S.rewardsQty = +$('rewardsQty').value;
+  S.targetRewards = +$('targetRewards').value;
+  S.targetRolls = +$('targetRolls').value;
+  S.sampleSize = +$('sampleSize').value;
+  S.totalTiles = S.width * S.height;
+  S.snakes = {}; S.ladders = {}; S.rewards = new Set();
+  autoPlace();
+  resetGame();
+  renderBoard();
+  saveState();
+  runSimulation();
+};
+
+// ── AUTO-PLACEMENT ALGORITHM ──
+// Math model:
+//   Base expected rolls (no snakes/ladders) ≈ N / 3.5  (avg dice = 3.5)
+//   Each snake on tile t with drop d has landing prob ≈ 1/6 per pass.
+//     It sends player back d tiles → adds d/3.5 extra rolls on average,
+//     weighted by the probability of reaching that tile: P(t) ≈ 6/N (uniform approx).
+//     Per-snake expected extra rolls ≈ (d / 3.5) × (6 / N) × (N / 3.5) = 6d / 12.25 ≈ 0.49d
+//   Each ladder saves similarly: ≈ 0.49d rolls.
+//   Total expected rolls ≈ baseRolls + 0.49 × Σ(snake_drops) − 0.49 × Σ(ladder_gains)
+//
+//   Solve for total snake drop needed:
+//     targetRolls = baseRolls + 0.49 × totalSnakeDrop − 0.49 × totalLadderGain
+//     totalSnakeDrop = (targetRolls − baseRolls + 0.49 × totalLadderGain) / 0.49
+//
+//   We fix a small number of ladders (1-3) for gameplay variety,
+//   then compute how many snakes + their avg drop to reach the target.
+
+function autoPlace() {
+  const N = S.totalTiles;
+  if (N < 9) return;
+
+  const AVG_DICE = 3.5;
+  const K = 0.49; // per-entity roll impact coefficient
+  const baseRolls = N / AVG_DICE;
+  const target = S.targetRolls;
+  const maxEntities = Math.max(1, Math.floor(N * 0.15)); // 15% cap per type
+
+  // Fixed ladder count: 1-3 depending on board size, for gameplay variety
+  const numLadders = Math.min(maxEntities, Math.max(1, Math.floor(N / 30) + 1));
+  const avgLadderGain = Math.floor(N * 0.25); // ladders skip ~25% of board
+  const totalLadderGain = numLadders * avgLadderGain;
+
+  // Solve: target = baseRolls + K * totalSnakeDrop - K * totalLadderGain
+  //   totalSnakeDrop = (target - baseRolls + K * totalLadderGain) / K
+  const neededSnakeDrop = (target - baseRolls + K * totalLadderGain) / K;
+
+  let numSnakes, avgSnakeDrop;
+  if (neededSnakeDrop <= 0) {
+    // Target is very low — no snakes needed, maybe more ladders
+    numSnakes = 0;
+    avgSnakeDrop = 0;
+  } else {
+    // Average snake drop: ~30% of board, clamped
+    avgSnakeDrop = Math.max(S.width, Math.min(Math.floor(N * 0.4), Math.floor(N * 0.3)));
+    numSnakes = Math.max(1, Math.round(neededSnakeDrop / avgSnakeDrop));
+    numSnakes = Math.min(numSnakes, maxEntities);
+  }
+
+  const used = new Set([1, N]);
+
+  // Place snakes — heads in upper 70%, drop length targets avgSnakeDrop ± 30%
+  const snakeZoneStart = Math.max(Math.floor(N * 0.3), S.width + 1);
+  for (let i = 0; i < numSnakes; i++) {
+    let attempts = 0;
+    while (attempts++ < 300) {
+      const head = randInt(snakeZoneStart, N - 1);
+      if (used.has(head)) continue;
+      // Target drop with some variance (±30%)
+      const dropTarget = Math.round(avgSnakeDrop * (0.7 + Math.random() * 0.6));
+      const tail = Math.max(2, head - dropTarget);
+      if (tail >= head || used.has(tail)) continue;
+      S.snakes[head] = tail;
+      used.add(head); used.add(tail);
+      break;
+    }
+  }
+
+  // Place ladders — bottoms in lower 70%, gain targets avgLadderGain ± 30%
+  const ladderZoneEnd = Math.min(Math.floor(N * 0.75), N - S.width);
+  for (let i = 0; i < numLadders; i++) {
+    let attempts = 0;
+    while (attempts++ < 300) {
+      const bottom = randInt(2, ladderZoneEnd);
+      if (used.has(bottom)) continue;
+      const gainTarget = Math.round(avgLadderGain * (0.7 + Math.random() * 0.6));
+      const top = Math.min(N - 1, bottom + gainTarget);
+      if (top <= bottom || used.has(top)) continue;
+      S.ladders[bottom] = top;
+      used.add(bottom); used.add(top);
+      break;
+    }
+  }
+
+  // Place rewards — randomly distributed, no adjacent rewards
+  // Adjacency = ±1 (horizontal neighbors) and ±width (vertical neighbors)
+  const rewardUsed = new Set();
+  const candidates = [];
+  for (let t = 2; t < N; t++) {
+    if (used.has(t)) continue;
+    candidates.push(t);
+  }
+  // Fisher-Yates shuffle
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  const W = S.width;
+  function isAdjacentToReward(t) {
+    const neighbors = [t - 1, t + 1, t - W, t + W, t - W - 1, t - W + 1, t + W - 1, t + W + 1];
+    return neighbors.some(n => rewardUsed.has(n));
+  }
+  let placed = 0;
+  for (let i = 0; i < candidates.length && placed < S.rewardsQty; i++) {
+    const t = candidates[i];
+    if (isAdjacentToReward(t)) continue;
+    S.rewards.add(t);
+    rewardUsed.add(t);
+    used.add(t);
+    placed++;
+  }
+}
+
+function randInt(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+
+// ── BOARD RENDERING ──
+function tileToGrid(tileNum) {
+  // tileNum: 1-based. Row 0 = bottom. Zigzag: even rows L→R, odd rows R→L
+  const t = tileNum - 1;
+  const row = Math.floor(t / S.width);
+  let col = t % S.width;
+  if (row % 2 === 1) col = S.width - 1 - col;
+  return { row: S.height - 1 - row, col };
+}
+
+function tileToPixel(tileNum) {
+  const g = tileToGrid(tileNum);
+  const tileSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
+  const gap = 2;
+  return {
+    x: g.col * (tileSize + gap) + tileSize / 2,
+    y: g.row * (tileSize + gap) + tileSize / 2
+  };
+}
+
+function renderBoard() {
+  // Adjust tile size based on board dimensions
+  const maxW = window.innerWidth - 700;
+  const maxH = window.innerHeight - 260; // leave room for title, dice, log
+  const tileFromW = Math.floor((maxW - S.width * 2) / S.width);
+  const tileFromH = Math.floor((maxH - S.height * 2) / S.height);
+  const tileSize = Math.max(22, Math.min(56, tileFromW, tileFromH));
+  document.documentElement.style.setProperty('--tile-size', tileSize + 'px');
+
+  boardEl.style.gridTemplateColumns = `repeat(${S.width}, var(--tile-size))`;
+  boardEl.innerHTML = '';
+
+  // Build tiles top-to-bottom, left-to-right in grid order
+  const tileEls = {};
+  for (let gridRow = 0; gridRow < S.height; gridRow++) {
+    for (let gridCol = 0; gridCol < S.width; gridCol++) {
+      // Convert grid position to tile number
+      const boardRow = S.height - 1 - gridRow; // board row 0 = bottom
+      let col = gridCol;
+      if (boardRow % 2 === 1) col = S.width - 1 - gridCol;
+      const tileNum = boardRow * S.width + col + 1;
+
+      const div = document.createElement('div');
+      div.className = 'tile';
+      div.dataset.tile = tileNum;
+
+      const numSpan = document.createElement('span');
+      numSpan.className = 'num';
+      numSpan.textContent = tileNum;
+      div.appendChild(numSpan);
+
+      if (tileNum === 1) div.classList.add('start');
+      else if (tileNum === S.totalTiles) div.classList.add('final');
+      else if (S.snakes[tileNum]) {
+        div.classList.add('snake');
+        const tag = document.createElement('span');
+        tag.className = 'dest-tag';
+        tag.textContent = '→' + S.snakes[tileNum];
+        div.appendChild(tag);
+      } else if (S.ladders[tileNum]) {
+        div.classList.add('ladder');
+        const tag = document.createElement('span');
+        tag.className = 'dest-tag';
+        tag.textContent = '→' + S.ladders[tileNum];
+        div.appendChild(tag);
+      } else if (S.rewards.has(tileNum)) {
+        div.classList.add('reward');
+      }
+
+      div.onclick = () => handleTileClick(tileNum);
+      boardEl.appendChild(div);
+      tileEls[tileNum] = div;
+    }
+  }
+
+  updateToken();
+}
+
+function renderSvgLines() {
+  const gap = 2;
+  const tileSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
+  const w = S.width * (tileSize + gap) - gap;
+  const h = S.height * (tileSize + gap) - gap;
+  svgEl.setAttribute('width', w);
+  svgEl.setAttribute('height', h);
+  svgEl.innerHTML = '';
+
+  // Draw snake lines
+  for (const [from, to] of Object.entries(S.snakes)) {
+    const p1 = tileToPixel(+from), p2 = tileToPixel(+to);
+    drawCurve(p1, p2, 'rgba(244,63,94,0.5)', 3);
+  }
+  // Draw ladder lines
+  for (const [from, to] of Object.entries(S.ladders)) {
+    const p1 = tileToPixel(+from), p2 = tileToPixel(+to);
+    drawCurve(p1, p2, 'rgba(16,185,129,0.5)', 3);
+  }
+}
+
+function drawCurve(p1, p2, color, width) {
+  const mx = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 20;
+  const my = (p1.y + p2.y) / 2;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', `M${p1.x},${p1.y} Q${mx},${my} ${p2.x},${p2.y}`);
+  path.setAttribute('stroke', color);
+  path.setAttribute('stroke-width', width);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-dasharray', '6,4');
+  svgEl.appendChild(path);
+}
+
+function updateToken() {
+  if (S.playerPos < 1) { tokenEl.style.display = 'none'; return; }
+  tokenEl.style.display = 'block';
+  const p = tileToPixel(Math.min(S.playerPos, S.totalTiles));
+  tokenEl.style.left = (p.x - 10 + 3) + 'px'; // +3 for board padding
+  tokenEl.style.top = (p.y - 10 + 3) + 'px';
+}
+
+// ── GAME LOGIC ──
+function resetGame() {
+  S.playerPos = 0;
+  S.playerRewards = new Set();
+  S.rollCount = 0;
+  S.gameOver = false;
+  S.autoRolling = false;
+  $('autoBtn').textContent = '⚡ Auto Roll';
+  logEl.innerHTML = 'New game. Roll the dice to start!';
+  diceEl.textContent = '-';
+  updateGameStats();
+  updateToken();
+  // Reset claimed reward tiles back to gift box
+  document.querySelectorAll('.tile.reward.claimed').forEach(t => t.classList.remove('claimed'));
+}
+
+$('resetBtn').onclick = resetGame;
+
+$('rollBtn').onclick = () => {
+  if (S.gameOver || S.totalTiles < 4) return;
+  rollDice();
+};
+
+$('autoBtn').onclick = () => {
+  S.autoRolling = !S.autoRolling;
+  $('autoBtn').textContent = S.autoRolling ? '⏹ Stop' : '⚡ Auto Roll';
+  if (S.autoRolling) {
+    if (S.gameOver) resetGame();
+    autoStep();
+  }
+};
+
+function autoStep() {
+  if (!S.autoRolling) {
+    $('autoBtn').textContent = '⚡ Auto Roll';
+    return;
+  }
+  if (S.gameOver) {
+    resetGame();
+    renderBoard();
+  }
+  rollDice();
+  setTimeout(autoStep, 400);
+}
+
+function rollDice() {
+  if (S.gameOver) return;
+  const val = randInt(1, 6);
+  S.rollCount = (S.rollCount || 0) + 1;
+  updateGameStats();
+  diceEl.textContent = val;
+  diceEl.classList.add('rolling');
+  setTimeout(() => diceEl.classList.remove('rolling'), 150);
+
+  if (S.playerPos === 0) S.playerPos = 1; // start
+
+  let newPos = S.playerPos + val;
+
+  // Player wins even if roll exceeds needed — per requirement
+  if (newPos >= S.totalTiles) {
+    newPos = S.totalTiles;
+    S.playerPos = newPos;
+    updateToken();
+    appendLog(`Rolled ${val}`, '');
+    appendLog(`🏆 Finished! Rolls: ${S.rollCount} | Rewards: ${S.playerRewards.size}/${S.rewards.size}`, 'final-msg');
+    S.gameOver = true;
+    S.autoRolling = false;
+    $('autoBtn').textContent = '⚡ Auto Roll';
+    spawnFinishCelebration();
+    return;
+  }
+
+  S.playerPos = newPos;
+  appendLog(`Rolled ${val}`, '');
+
+  // Check snake
+  if (S.snakes[newPos]) {
+    const dest = S.snakes[newPos];
+    appendLog(`🐍 Snake! Slide down`, 'snake-msg');
+    S.playerPos = dest;
+  }
+  // Check ladder
+  else if (S.ladders[newPos]) {
+    const dest = S.ladders[newPos];
+    appendLog(`🪜 Ladder! Climb up`, 'ladder-msg');
+    S.playerPos = dest;
+  }
+  // Check reward
+  if (S.rewards.has(S.playerPos) && !S.playerRewards.has(S.playerPos)) {
+    S.playerRewards.add(S.playerPos);
+    updateGameStats();
+    appendLog(`💎 Reward collected! (${S.playerRewards.size}/${S.rewards.size})`, 'reward-msg');
+    spawnRewardBurst(S.playerPos);
+    // Mark tile as claimed (gift box → diamond)
+    const tile = document.querySelector(`.tile[data-tile="${S.playerPos}"]`);
+    if (tile) tile.classList.add('claimed');
+  }
+
+  updateToken();
+}
+
+// ── REWARD BURST ANIMATION ──
+function spawnRewardBurst(tileNum) {
+  const p = tileToPixel(tileNum);
+  const wrapper = $('boardWrapper');
+  const offsetX = p.x + 3; // board padding
+  const offsetY = p.y + 3;
+  const colors = ['#fbbf24','#f59e0b','#fde68a','#fff7ed','#fb923c'];
+
+  // Particles
+  const burst = document.createElement('div');
+  burst.className = 'reward-burst';
+  burst.style.left = offsetX + 'px';
+  burst.style.top = offsetY + 'px';
+  for (let i = 0; i < 12; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'particle';
+    const angle = (i / 12) * Math.PI * 2;
+    const dist = 20 + Math.random() * 25;
+    dot.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    dot.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+    dot.style.background = colors[i % colors.length];
+    dot.style.animationDelay = (Math.random() * 0.1) + 's';
+    burst.appendChild(dot);
+  }
+  wrapper.appendChild(burst);
+
+  // Ring
+  const ring = document.createElement('div');
+  ring.className = 'reward-ring';
+  ring.style.left = offsetX + 'px';
+  ring.style.top = offsetY + 'px';
+  wrapper.appendChild(ring);
+
+  // Float text
+  const txt = document.createElement('div');
+  txt.className = 'reward-text';
+  txt.textContent = '💎 +1';
+  txt.style.left = offsetX + 'px';
+  txt.style.top = (offsetY - 10) + 'px';
+  wrapper.appendChild(txt);
+
+  setTimeout(() => { burst.remove(); ring.remove(); txt.remove(); }, 1000);
+}
+
+// ── FINAL TILE CELEBRATION ──
+function spawnFinishCelebration() {
+  // Screen flash
+  const flash = document.createElement('div');
+  flash.className = 'trophy-flash';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 800);
+
+  // Win text
+  const win = document.createElement('div');
+  win.className = 'win-text';
+  win.textContent = '🏆 You Win!';
+  document.body.appendChild(win);
+  setTimeout(() => win.remove(), 900);
+
+  // Confetti
+  const confettiColors = ['#f43f5e','#6366f1','#10b981','#f59e0b','#a855f7','#3b82f6','#ec4899'];
+  for (let i = 0; i < 60; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = (Math.random() * 100) + 'vw';
+    piece.style.top = (-10 - Math.random() * 20) + 'px';
+    piece.style.background = confettiColors[i % confettiColors.length];
+    piece.style.setProperty('--fall', (window.innerHeight + 100) + 'px');
+    piece.style.setProperty('--spin', (Math.random() * 720 - 360) + 'deg');
+    piece.style.setProperty('--duration', (1.5 + Math.random() * 1.5) + 's');
+    piece.style.animationDelay = (Math.random() * 0.5) + 's';
+    piece.style.width = (6 + Math.random() * 6) + 'px';
+    piece.style.height = (8 + Math.random() * 8) + 'px';
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 3500);
+  }
+}
+
+function updateGameStats() {
+  $('gsRolls').textContent = S.rollCount || 0;
+  $('gsRewards').textContent = `${S.playerRewards.size} / ${S.rewards.size}`;
+}
+
+function appendLog(msg, cls) {
+  const div = document.createElement('div');
+  if (cls) div.className = cls;
+  div.textContent = msg;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+  // Keep last 100 entries
+  while (logEl.children.length > 100) logEl.removeChild(logEl.firstChild);
+}
+
+// ── EDIT MODE ──
+const editBar = $('editBar');
+const editHint = $('editHint');
+editBar.querySelectorAll('.edit-btn').forEach(btn => {
+  btn.onclick = () => {
+    const tool = btn.dataset.tool;
+    if (S.editTool === tool) {
+      S.editTool = null;
+      S.editStep = null;
+      editBar.querySelectorAll('.edit-btn').forEach(b => b.className = 'edit-btn');
+      editHint.textContent = '';
+    } else {
+      S.editTool = tool;
+      S.editStep = null;
+      editBar.querySelectorAll('.edit-btn').forEach(b => b.className = 'edit-btn');
+      const cls = tool === 'snake' ? 'active-snake' : tool === 'ladder' ? 'active-ladder' : tool === 'reward' ? 'active-reward' : 'active-remove';
+      btn.classList.add(cls);
+      if (tool === 'snake') editHint.textContent = 'Click snake HEAD tile (where player lands)';
+      else if (tool === 'ladder') editHint.textContent = 'Click ladder BOTTOM tile (where player lands)';
+      else if (tool === 'reward') editHint.textContent = 'Click a tile to place reward';
+      else editHint.textContent = 'Click a tile to remove snake/ladder/reward';
+    }
+  };
+});
+
+function handleTileClick(tileNum) {
+  if (!S.editTool || tileNum === 1 || tileNum === S.totalTiles) return;
+
+  if (S.editTool === 'remove') {
+    delete S.snakes[tileNum];
+    delete S.ladders[tileNum];
+    S.rewards.delete(tileNum);
+    // Also remove if it's a destination
+    for (const [k, v] of Object.entries(S.snakes)) { if (v === tileNum) delete S.snakes[k]; }
+    for (const [k, v] of Object.entries(S.ladders)) { if (v === tileNum) delete S.ladders[k]; }
+    renderBoard();
+    saveState();
+    return;
+  }
+
+  if (S.editTool === 'reward') {
+    if (S.snakes[tileNum] || S.ladders[tileNum]) return;
+    if (S.rewards.has(tileNum)) S.rewards.delete(tileNum);
+    else S.rewards.add(tileNum);
+    renderBoard();
+    saveState();
+    return;
+  }
+
+  if (S.editTool === 'snake') {
+    if (!S.editStep) {
+      // Selecting head
+      if (S.snakes[tileNum] || S.ladders[tileNum] || S.rewards.has(tileNum)) return;
+      S.editStep = { from: tileNum };
+      editHint.textContent = `Snake head at ${tileNum}. Now click TAIL tile (lower number).`;
+    } else {
+      // Selecting tail
+      if (tileNum >= S.editStep.from || S.snakes[tileNum] || S.ladders[tileNum] || S.rewards.has(tileNum)) {
+        editHint.textContent = 'Tail must be lower than head. Try again.';
+        return;
+      }
+      // Check if tile is already a destination
+      if (Object.values(S.snakes).includes(tileNum) || Object.values(S.ladders).includes(tileNum)) {
+        editHint.textContent = 'That tile is already a destination. Try another.';
+        return;
+      }
+      S.snakes[S.editStep.from] = tileNum;
+      S.editStep = null;
+      editHint.textContent = 'Snake placed! Click another head or switch tool.';
+      renderBoard();
+      saveState();
+    }
+    return;
+  }
+
+  if (S.editTool === 'ladder') {
+    if (!S.editStep) {
+      if (S.snakes[tileNum] || S.ladders[tileNum] || S.rewards.has(tileNum)) return;
+      S.editStep = { from: tileNum };
+      editHint.textContent = `Ladder bottom at ${tileNum}. Now click TOP tile (higher number).`;
+    } else {
+      if (tileNum <= S.editStep.from || S.snakes[tileNum] || S.ladders[tileNum] || S.rewards.has(tileNum)) {
+        editHint.textContent = 'Top must be higher than bottom. Try again.';
+        return;
+      }
+      if (Object.values(S.snakes).includes(tileNum) || Object.values(S.ladders).includes(tileNum)) {
+        editHint.textContent = 'That tile is already a destination. Try another.';
+        return;
+      }
+      S.ladders[S.editStep.from] = tileNum;
+      S.editStep = null;
+      editHint.textContent = 'Ladder placed! Click another bottom or switch tool.';
+      renderBoard();
+      saveState();
+    }
+    return;
+  }
+}
+
+// ── SIMULATION ENGINE (Web Worker via Blob) ──
+$('simBtn').onclick = () => {
+  S.sampleSize = +$('sampleSize').value;
+  runSimulation();
+};
+
+function runSimulation() {
+  if (S.totalTiles < 4) return;
+
+  const snakes = { ...S.snakes };
+  const ladders = { ...S.ladders };
+  const rewards = [...S.rewards];
+  const totalTiles = S.totalTiles;
+  const sampleSize = S.sampleSize;
+
+  $('simProgress').style.display = 'block';
+  $('simFill').style.width = '0%';
+  $('simStatus').textContent = `Simulating ${sampleSize.toLocaleString()} games...`;
+  $('simBtn').disabled = true;
+
+  const workerCode = `
+    self.onmessage = function(e) {
+      const { snakes, ladders, rewards, totalTiles, sampleSize } = e.data;
+      const rewardSet = new Set(rewards);
+      const rollCounts = new Float64Array(sampleSize);
+      const rewardCounts = new Float64Array(sampleSize);
+      const perReward = {}; // tile -> count of times collected
+      for (const r of rewards) perReward[r] = 0;
+
+      const batchSize = Math.max(1000, Math.floor(sampleSize / 20));
+
+      for (let i = 0; i < sampleSize; i++) {
+        let pos = 1, rolls = 0;
+        const collected = new Set();
+        while (pos < totalTiles) {
+          const dice = 1 + Math.floor(Math.random() * 6);
+          rolls++;
+          pos += dice;
+          if (pos >= totalTiles) { pos = totalTiles; break; }
+          if (snakes[pos]) pos = snakes[pos];
+          else if (ladders[pos]) pos = ladders[pos];
+          if (rewardSet.has(pos) && !collected.has(pos)) collected.add(pos);
+          if (rolls > 10000) break; // safety
+        }
+        rollCounts[i] = rolls;
+        rewardCounts[i] = collected.size;
+        for (const r of collected) perReward[r]++;
+
+        if (i % batchSize === 0) {
+          self.postMessage({ type: 'progress', pct: (i / sampleSize) * 100 });
+        }
+      }
+
+      // Sort for statistics
+      const sortedRolls = Array.from(rollCounts).sort((a, b) => a - b);
+      const sortedRewards = Array.from(rewardCounts).sort((a, b) => a - b);
+
+      // Percentiles
+      const p = (arr, pct) => arr[Math.floor(arr.length * pct / 100)];
+
+      // Roll distribution buckets
+      const maxRoll = sortedRolls[sortedRolls.length - 1];
+      const minRoll = sortedRolls[0];
+      const bucketCount = Math.min(20, Math.max(8, Math.ceil((maxRoll - minRoll) / 3)));
+      const bucketSize = Math.max(1, Math.ceil((maxRoll - minRoll + 1) / bucketCount));
+      const rollBuckets = [];
+      for (let b = 0; b < bucketCount; b++) {
+        const lo = minRoll + b * bucketSize;
+        const hi = lo + bucketSize - 1;
+        let count = 0;
+        for (let j = 0; j < sampleSize; j++) {
+          if (rollCounts[j] >= lo && rollCounts[j] <= hi) count++;
+        }
+        rollBuckets.push({ lo, hi, count, pct: (count / sampleSize) * 100 });
+      }
+
+      // Reward count distribution
+      const maxRew = sortedRewards[sortedRewards.length - 1];
+      const rewardDist = [];
+      for (let r = 0; r <= maxRew; r++) {
+        let count = 0;
+        for (let j = 0; j < sampleSize; j++) {
+          if (rewardCounts[j] === r) count++;
+        }
+        rewardDist.push({ count: r, freq: count, pct: (count / sampleSize) * 100 });
+      }
+
+      // Mean
+      let rollSum = 0, rewSum = 0;
+      for (let j = 0; j < sampleSize; j++) { rollSum += rollCounts[j]; rewSum += rewardCounts[j]; }
+
+      self.postMessage({
+        type: 'done',
+        stats: {
+          rollMean: rollSum / sampleSize,
+          rollMedian: p(sortedRolls, 50),
+          rollP25: p(sortedRolls, 25),
+          rollP75: p(sortedRolls, 75),
+          rollP5: p(sortedRolls, 5),
+          rollP95: p(sortedRolls, 95),
+          rollMin: minRoll,
+          rollMax: maxRoll,
+          rewMean: rewSum / sampleSize,
+          rewMedian: p(sortedRewards, 50),
+          rollBuckets,
+          rewardDist,
+          perReward,
+          sampleSize
+        }
+      });
+    };
+  `;
+
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const worker = new Worker(URL.createObjectURL(blob));
+
+  worker.onmessage = (e) => {
+    if (e.data.type === 'progress') {
+      $('simFill').style.width = e.data.pct + '%';
+    } else if (e.data.type === 'done') {
+      $('simFill').style.width = '100%';
+      setTimeout(() => { $('simProgress').style.display = 'none'; }, 500);
+      $('simStatus').textContent = `Completed ${sampleSize.toLocaleString()} simulations.`;
+      $('simBtn').disabled = false;
+      S.simResults = e.data.stats;
+      renderStats(e.data.stats);
+      worker.terminate();
+      URL.revokeObjectURL(blob);
+    }
+  };
+
+  worker.postMessage({ snakes, ladders, rewards, totalTiles, sampleSize });
+}
+
+// ── STATS RENDERING ──
+function renderStats(st) {
+  const c = $('statsContent');
+  c.innerHTML = '';
+
+  // Roll stats
+  const h = document.createElement('h3');
+  h.style.cssText = 'font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin-bottom:10px';
+  h.textContent = 'Rolls to Finish';
+  c.appendChild(h);
+
+  const row = document.createElement('div');
+  row.className = 'stat-row';
+  row.innerHTML = `
+    <div class="stat-card"><div class="stat-title">Median</div><div class="stat-value">${st.rollMedian}</div><div class="stat-sub">50th percentile</div></div>
+    <div class="stat-card"><div class="stat-title">Mean</div><div class="stat-value">${st.rollMean.toFixed(1)}</div><div class="stat-sub">average rolls</div></div>
+  `;
+  c.appendChild(row);
+
+  const row2 = document.createElement('div');
+  row2.className = 'stat-row';
+  row2.style.marginTop = '8px';
+  row2.innerHTML = `
+    <div class="stat-card"><div class="stat-title">P25 / P75</div><div class="stat-value" style="font-size:16px">${st.rollP25} / ${st.rollP75}</div></div>
+    <div class="stat-card"><div class="stat-title">P5 / P95</div><div class="stat-value" style="font-size:16px">${st.rollP5} / ${st.rollP95}</div></div>
+  `;
+  c.appendChild(row2);
+
+  const row2b = document.createElement('div');
+  row2b.className = 'stat-row';
+  row2b.style.marginTop = '8px';
+  row2b.innerHTML = `
+    <div class="stat-card"><div class="stat-title">Min</div><div class="stat-value" style="font-size:16px">${st.rollMin}</div></div>
+    <div class="stat-card"><div class="stat-title">Max</div><div class="stat-value" style="font-size:16px">${st.rollMax}</div></div>
+  `;
+  c.appendChild(row2b);
+
+  // Roll distribution histogram
+  const h2 = document.createElement('h3');
+  h2.style.cssText = 'font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin:16px 0 8px';
+  h2.textContent = 'Roll Distribution';
+  c.appendChild(h2);
+
+  const hist = document.createElement('div');
+  hist.className = 'histogram';
+  const maxPct = Math.max(...st.rollBuckets.map(b => b.pct));
+  for (const b of st.rollBuckets) {
+    const w = maxPct > 0 ? (b.pct / maxPct) * 100 : 0;
+    hist.innerHTML += `
+      <div class="bar-row">
+        <span class="bar-label">${b.lo}-${b.hi}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:var(--accent)"></div></div>
+        <span class="bar-pct">${b.pct.toFixed(1)}%</span>
+      </div>`;
+  }
+  c.appendChild(hist);
+
+  // Rewards stats
+  const h3 = document.createElement('h3');
+  h3.style.cssText = 'font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin:20px 0 10px';
+  h3.textContent = 'Reward Collection';
+  c.appendChild(h3);
+
+  const row3 = document.createElement('div');
+  row3.className = 'stat-row';
+  row3.innerHTML = `
+    <div class="stat-card"><div class="stat-title">Median Collected</div><div class="stat-value">${st.rewMedian}</div><div class="stat-sub">of ${S.rewards.size} rewards</div></div>
+    <div class="stat-card"><div class="stat-title">Mean Collected</div><div class="stat-value">${st.rewMean.toFixed(2)}</div><div class="stat-sub">per game</div></div>
+  `;
+  c.appendChild(row3);
+
+  // Rewards count probability distribution
+  const h4 = document.createElement('h3');
+  h4.style.cssText = 'font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin:16px 0 8px';
+  h4.textContent = 'Rewards Count Probability';
+  c.appendChild(h4);
+
+  const hist2 = document.createElement('div');
+  hist2.className = 'histogram';
+  const maxRewPct = Math.max(...st.rewardDist.map(b => b.pct));
+  for (const b of st.rewardDist) {
+    const w = maxRewPct > 0 ? (b.pct / maxRewPct) * 100 : 0;
+    hist2.innerHTML += `
+      <div class="bar-row">
+        <span class="bar-label">${b.count} rew</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:var(--reward)"></div></div>
+        <span class="bar-pct">${b.pct.toFixed(1)}%</span>
+      </div>`;
+  }
+  c.appendChild(hist2);
+
+  // Per-reward collection rate
+  const h5 = document.createElement('h3');
+  h5.style.cssText = 'font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin:16px 0 8px';
+  h5.textContent = 'Per-Reward Collection Rate';
+  c.appendChild(h5);
+
+  const table = document.createElement('table');
+  table.className = 'reward-table';
+  table.innerHTML = '<thead><tr><th>Tile</th><th>Collected</th><th>Rate</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  const rewardTiles = [...S.rewards].sort((a, b) => a - b);
+  for (const tile of rewardTiles) {
+    const count = st.perReward[tile] || 0;
+    const rate = ((count / st.sampleSize) * 100).toFixed(1);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>💎 ${tile}</td><td>${count.toLocaleString()}</td><td class="pct">${rate}%</td>`;
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  c.appendChild(table);
+
+  // Board summary
+  const h6 = document.createElement('h3');
+  h6.style.cssText = 'font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim);margin:20px 0 8px';
+  h6.textContent = 'Board Summary';
+  c.appendChild(h6);
+
+  const summary = document.createElement('div');
+  summary.className = 'stat-card';
+  summary.innerHTML = `
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.8;color:var(--text-dim)">
+      Board: <span style="color:var(--text)">${S.width} × ${S.height}</span> (${S.totalTiles} tiles)<br>
+      Snakes: <span style="color:var(--snake-glow)">${Object.keys(S.snakes).length}</span><br>
+      Ladders: <span style="color:var(--ladder-glow)">${Object.keys(S.ladders).length}</span><br>
+      Rewards: <span style="color:var(--reward-glow)">${S.rewards.size}</span><br>
+      Sample: <span style="color:var(--text)">${st.sampleSize.toLocaleString()}</span>
+    </div>`;
+  c.appendChild(summary);
+}
+
+// ── INIT ──
+window.addEventListener('resize', () => { if (S.totalTiles > 1) renderBoard(); });
+
+// Restore last saved board on page load
+if (loadState()) {
+  resetGame();
+  renderBoard();
+  logEl.innerHTML = 'Restored previous board. Roll the dice or Apply new settings.';
+}
+</script>
+</body>
+</html>
