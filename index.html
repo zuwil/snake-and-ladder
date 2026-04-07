@@ -550,13 +550,33 @@ canvas.chart{width:100%;height:120px;border-radius:6px;background:var(--surface2
         <p>Use the <span class="highlight">left panel</span> to adjust settings, then click <span class="highlight">"Apply Settings &amp; Generate Board"</span> to generate. A simulation runs automatically.</p>
         <table class="tutorial-table">
           <tr><th>Setting</th><th>How it works</th></tr>
-          <tr><td><span class="highlight">Board Width</span></td><td>Number of columns (3&ndash;20). Combined with height to determine total tiles (width &times; height).</td></tr>
-          <tr><td><span class="highlight">Board Height</span></td><td>Number of rows (3&ndash;20). A 10&times;10 board = 100 tiles. Larger boards mean longer games.</td></tr>
-          <tr><td><span class="highlight">Rewards Quantity</span></td><td>How many reward tiles (0&ndash;50) are placed on the board. Rewards are spread out with no two adjacent to each other.</td></tr>
-          <tr><td><span class="highlight">Target Rewards Per Run</span></td><td>The desired median number of rewards a player collects per game. The system places rewards in positions that make this target achievable.</td></tr>
-          <tr><td><span class="highlight">Target Avg Rolls</span></td><td>The desired median rolls to finish the game. The algorithm auto-calculates how many snakes and ladders to place (and how far they send you) to hit this target.</td></tr>
-          <tr><td><span class="highlight">Simulation Sample Size</span></td><td>How many complete games to simulate (1K&ndash;2M). Higher values give more accurate statistics but take longer to run.</td></tr>
+          <tr><td><span class="highlight">Board Width</span></td><td>Number of columns (3&ndash;20). Combined with height to determine total tiles (width &times; height). E.g. 10&times;10 = 100 tiles, 5&times;5 = 25 tiles. Total tiles directly affects game length &mdash; the base rolls needed (with no snakes/ladders) is approximately <span class="highlight">total tiles &divide; 3.5</span> (since average dice roll = 3.5).</td></tr>
+          <tr><td><span class="highlight">Board Height</span></td><td>Number of rows (3&ndash;20). Works together with width. Larger boards allow more room for snakes, ladders, and rewards. The board is laid out in a zigzag pattern (left-to-right, then right-to-left on the next row).</td></tr>
+          <tr><td><span class="highlight">Rewards Quantity</span></td><td>How many reward tiles (0&ndash;50) to place. Rewards are randomly distributed with a <span class="highlight">no-adjacency rule</span> &mdash; no two rewards can be next to each other (horizontally, vertically, or diagonally). Rewards also cannot be placed on tiles already occupied by snakes or ladders.</td></tr>
+          <tr><td><span class="highlight">Target Rewards Per Run</span></td><td>The desired median number of rewards collected per game. This is a <span class="highlight">soft target</span> &mdash; the system places rewards in reachable positions, but the actual median depends on where snakes/ladders route the player. The simulation result shows the true median achieved.</td></tr>
+          <tr><td><span class="highlight">Target Avg Rolls</span></td><td>The desired median rolls to finish. The algorithm uses a math model to calculate how many snakes and ladders to place:<br>
+            &bull; <span class="highlight">Base rolls</span> = total tiles &divide; 3.5<br>
+            &bull; Each <span class="snake-hl">snake</span> adds ~0.49 &times; drop distance extra rolls<br>
+            &bull; Each <span class="ladder-hl">ladder</span> saves ~0.49 &times; climb distance rolls<br>
+            &bull; The algorithm fixes 1&ndash;3 ladders (based on board size), then solves for how many snakes + how far they drop to hit the target<br>
+            &bull; Max snakes/ladders capped at <span class="highlight">15% of total tiles</span> each</td></tr>
+          <tr><td><span class="highlight">Simulation Sample Size</span></td><td>How many complete games to simulate (1K&ndash;2M). Each game plays from tile 1 to the final tile, rolling dice, hitting snakes/ladders, and collecting rewards. Higher values give more statistically accurate results but take longer. Runs in a background Web Worker so the page stays responsive.</td></tr>
         </table>
+
+        <div class="tutorial-layout" style="margin-top:12px;margin-left:32px">
+          <span class="panel-label" style="color:var(--snake-glow)">Limitations &amp; What's Not Achievable</span>
+          <div style="margin-top:8px;line-height:2">
+            <span class="snake-hl">&bull; Board too small (under 3&times;3 = 9 tiles)</span> &mdash; no snakes, ladders, or rewards will be placed at all. The algorithm skips placement entirely.<br>
+            <span class="snake-hl">&bull; Target Avg Rolls lower than base rolls</span> &mdash; on a 10&times;10 board, base rolls &asymp; 29. Setting target below this means the algorithm needs lots of ladders, but it only places 1&ndash;3 ladders. If the target is extremely low (e.g. target 5 on a 100-tile board), the result will still be close to base rolls since there aren't enough ladders to bridge the gap. No snakes will be placed in this case.<br>
+            <span class="snake-hl">&bull; Target Avg Rolls extremely high</span> &mdash; the algorithm tries to place more/longer snakes, but snakes and ladders are each capped at 15% of total tiles. On a 100-tile board, that's max 15 snakes. If your target needs more snake impact than 15 snakes can provide, the actual median will fall short of the target.<br>
+            <span class="snake-hl">&bull; Rewards Quantity too high for the board</span> &mdash; due to the no-adjacency rule, rewards need spacing. On a 5&times;5 board, you can fit roughly 6&ndash;7 rewards max even if you set quantity to 50. The system will place as many as it can and silently stop.<br>
+            <span class="snake-hl">&bull; Target Rewards Per Run &gt; Rewards Quantity</span> &mdash; you can never collect more rewards than exist on the board. The actual median will cap at the quantity available.<br>
+            <span class="snake-hl">&bull; Target Rewards Per Run is high but board has many snakes</span> &mdash; snakes can route players past reward tiles, reducing collection rates. The target rewards setting doesn't directly control snake/ladder placement, so heavy-snake boards will naturally have lower reward collection.<br>
+            <span class="snake-hl">&bull; Placement collisions</span> &mdash; each snake uses 2 tiles (head + tail), each ladder uses 2 tiles (bottom + top), and each reward uses 1 tile. Tile 1 (start) and the final tile are always reserved. On small boards, there may not be enough free tiles for all requested entities.
+          </div>
+        </div>
+
+        <p style="margin-top:12px;margin-left:32px"><span class="highlight">Tip:</span> After generating, always check the simulation results to see the <span class="highlight">actual median</span> vs your target. If they don't match, the board constraints made the exact target impossible &mdash; try adjusting your settings or manually editing the board.</p>
         <p style="margin-top:8px;margin-left:32px"><span class="highlight">Note:</span> Clicking <span class="highlight">"Apply Settings &amp; Generate Board"</span> will <span class="snake-hl">regenerate the entire board</span> (new snakes, ladders, rewards placement) and auto-run a simulation. Use this when you want a fresh board.</p>
         <p style="margin-top:4px;margin-left:32px"><span class="highlight">Export / Import</span> &mdash; save your board layout as a .json file or load a previously saved one.</p>
       </div>
