@@ -1128,9 +1128,9 @@ function renderSvgSprites() {
     const variant = getLadderVariant(from, to);
     const c = LADDER_COLORS[variant];
 
-    // Scale: stretch length to fit, keep width proportional but wide
+    // Scale: stretch length to fit, fixed narrow width
     const scaleY = dist / TEMPLATE_HEIGHT;
-    const scaleX = Math.max(0.5, Math.min(0.8, 0.5 + scaleY * 0.12));
+    const scaleX = 0.5;
 
     // Ladder template: rails at ±14, rungs connecting them
     const railW = 14; // half-width of ladder
