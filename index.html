@@ -557,7 +557,8 @@ canvas.chart{width:100%;height:120px;border-radius:6px;background:var(--surface2
           <tr><td><span class="highlight">Target Avg Rolls</span></td><td>The desired median rolls to finish the game. The algorithm auto-calculates how many snakes and ladders to place (and how far they send you) to hit this target.</td></tr>
           <tr><td><span class="highlight">Simulation Sample Size</span></td><td>How many complete games to simulate (1K&ndash;2M). Higher values give more accurate statistics but take longer to run.</td></tr>
         </table>
-        <p style="margin-top:8px;margin-left:32px"><span class="highlight">Export / Import</span> &mdash; save your board layout as a .json file or load a previously saved one.</p>
+        <p style="margin-top:8px;margin-left:32px"><span class="highlight">Note:</span> Clicking <span class="highlight">"Apply Settings &amp; Generate Board"</span> will <span class="snake-hl">regenerate the entire board</span> (new snakes, ladders, rewards placement) and auto-run a simulation. Use this when you want a fresh board.</p>
+        <p style="margin-top:4px;margin-left:32px"><span class="highlight">Export / Import</span> &mdash; save your board layout as a .json file or load a previously saved one.</p>
       </div>
 
       <div class="tutorial-step">
@@ -586,7 +587,13 @@ canvas.chart{width:100%;height:120px;border-radius:6px;background:var(--surface2
 
       <div class="tutorial-step">
         <div class="tutorial-step-title"><span class="tutorial-step-num">4</span> Run Simulation</div>
-        <p>Pick a <span class="highlight">sample size</span> and click <span class="highlight">"Run Simulation"</span>.</p>
+        <p>There are <span class="highlight">two simulation controls</span> with different behaviors:</p>
+        <table class="tutorial-table">
+          <tr><th>Location</th><th>Control</th><th>Behavior</th></tr>
+          <tr><td>Left Panel</td><td><span class="highlight">Apply Settings &amp; Generate Board</span></td><td><span class="snake-hl">Regenerates the board</span> with new snakes, ladders &amp; rewards, then auto-runs a simulation. Use when you want a fresh board.</td></tr>
+          <tr><td>Right Panel</td><td><span class="highlight">Run Simulation</span></td><td>Runs a simulation on the <span class="ladder-hl">current board as-is</span> without changing it. Use after manual edits to see updated stats.</td></tr>
+        </table>
+        <p>Both share the same <span class="highlight">sample size</span> setting &mdash; changing it in either panel syncs the other.</p>
         <p>Results show: roll statistics (median, mean, percentiles), roll distribution histogram, reward collection rates, per-reward table, and board summary.</p>
       </div>
 
