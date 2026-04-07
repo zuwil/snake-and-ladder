@@ -67,9 +67,9 @@ button{font-family:'Fredoka',sans-serif;cursor:pointer;border:none;border-radius
 .tile:hover{background:var(--surface2);transform:scale(1.05);z-index:2}
 .tile .num{font-size:9px;opacity:.5;position:absolute;top:2px;left:4px}
 .tile.snake{background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.3)}
-.tile.snake::after{content:'🐍';font-size:16px}
+.tile.snake::after{content:'';font-size:16px}
 .tile.ladder{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3)}
-.tile.ladder::after{content:'🪜';font-size:16px}
+.tile.ladder::after{content:'';font-size:16px}
 .tile.reward{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3)}
 .tile.reward::after{content:'🎁';font-size:16px}
 .tile.reward.claimed{background:rgba(245,158,11,.25);border:1px solid rgba(245,158,11,.5)}
@@ -91,8 +91,8 @@ button{font-family:'Fredoka',sans-serif;cursor:pointer;border:none;border-radius
   z-index:10;pointer-events:none;
 }
 
-/* SVG overlay (unused) */
-.board-svg{display:none}
+/* SVG overlay for snake/ladder sprites */
+.board-svg{position:absolute;top:3px;left:3px;pointer-events:none;z-index:2;overflow:visible}
 
 /* REWARD CLAIM ANIMATION */
 .reward-burst{position:absolute;pointer-events:none;z-index:20}
@@ -937,22 +937,52 @@ function renderBoard() {
       numSpan.textContent = tileNum;
       div.appendChild(numSpan);
 
+      // Build reverse lookups for landing tiles
+      // (computed once per render via closure — but simple enough inline)
       if (tileNum === 1) div.classList.add('start');
       else if (tileNum === S.totalTiles) div.classList.add('final');
       else if (S.snakes[tileNum]) {
         div.classList.add('snake');
+        const variant = getSnakeVariant(tileNum, S.snakes[tileNum]);
+        const col = SNAKE_COLORS[variant].body;
+        div.style.background = col + '22';
+        div.style.border = `1px solid ${col}55`;
         const tag = document.createElement('span');
         tag.className = 'dest-tag';
+        tag.style.color = col;
         tag.textContent = '→' + S.snakes[tileNum];
         div.appendChild(tag);
       } else if (S.ladders[tileNum]) {
         div.classList.add('ladder');
+        const variant = getLadderVariant(tileNum, S.ladders[tileNum]);
+        const col = LADDER_COLORS[variant].rail;
+        div.style.background = col + '22';
+        div.style.border = `1px solid ${col}55`;
         const tag = document.createElement('span');
         tag.className = 'dest-tag';
+        tag.style.color = col;
         tag.textContent = '→' + S.ladders[tileNum];
         div.appendChild(tag);
       } else if (S.rewards.has(tileNum)) {
         div.classList.add('reward');
+      }
+
+      // Highlight landing/destination tiles with matching sprite color
+      for (const [from, to] of Object.entries(S.snakes)) {
+        if (+to === tileNum) {
+          const variant = getSnakeVariant(from, to);
+          const col = SNAKE_COLORS[variant].body;
+          div.style.background = col + '18';
+          div.style.border = `1px dashed ${col}44`;
+        }
+      }
+      for (const [from, to] of Object.entries(S.ladders)) {
+        if (+to === tileNum) {
+          const variant = getLadderVariant(from, to);
+          const col = LADDER_COLORS[variant].rail;
+          div.style.background = col + '18';
+          div.style.border = `1px dashed ${col}44`;
+        }
       }
 
       div.onclick = () => handleTileClick(tileNum);
@@ -961,41 +991,174 @@ function renderBoard() {
     }
   }
 
+  renderSvgSprites();
   updateToken();
 }
 
-function renderSvgLines() {
+const SNAKE_COLORS = [
+  { body: '#22c55e', spot: '#fde047', outline: '#166534', eye: '#fff', pupil: '#000' }, // green+yellow
+  { body: '#a855f7', spot: '#f9a8d4', outline: '#581c87', eye: '#fff', pupil: '#000' }, // purple+pink
+  { body: '#3b82f6', spot: '#67e8f9', outline: '#1e3a5f', eye: '#fff', pupil: '#000' }, // blue+cyan
+  { body: '#ef4444', spot: '#fb923c', outline: '#7f1d1d', eye: '#fff', pupil: '#000' }, // red+orange
+];
+const LADDER_COLORS = [
+  { rail: '#3b82f6', railDark: '#1e40af', rung: '#d4a44a', rungDark: '#b8860b' }, // blue
+  { rail: '#ef4444', railDark: '#991b1b', rung: '#d4a44a', rungDark: '#b8860b' }, // red
+  { rail: '#92400e', railDark: '#5c2d0e', rung: '#d4a44a', rungDark: '#b8860b' }, // brown
+];
+
+function getSnakeVariant(from, to) { return (+from * 7 + +to * 3) % 4; }
+function getLadderVariant(from, to) { return (+from * 5 + +to * 2) % 3; }
+
+function getSvgDefs() {
+  // Snake templates: wavy body with head, eyes, spots, tongue
+  // Each snake is drawn vertically from (0,0) at tail to (0,-180) at head
+  const snakeColors = SNAKE_COLORS;
+
+  let defs = '';
+  // Snake templates are now generated per-instance in renderSvgSprites
+  // We only define color info here; actual paths are built dynamically
+
+  // Ladder templates are now generated per-instance in renderSvgSprites
+
+  return `<defs>${defs}</defs>`;
+}
+
+function renderSvgSprites() {
   const gap = 2;
   const tileSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-size'));
   const w = S.width * (tileSize + gap) - gap;
   const h = S.height * (tileSize + gap) - gap;
   svgEl.setAttribute('width', w);
   svgEl.setAttribute('height', h);
-  svgEl.innerHTML = '';
+  svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svgEl.innerHTML = getSvgDefs();
 
-  // Draw snake lines
+  const TEMPLATE_HEIGHT = 180; // template sprites are 180px tall
+
+  // Seeded random for deterministic but varied curves
+  function seededRand(seed) {
+    let s = seed;
+    return function() {
+      s = (s * 16807 + 0) % 2147483647;
+      return (s - 1) / 2147483646;
+    };
+  }
+
+  // Generate a natural snake path with irregular curves
+  function makeSnakePath(seed, segments) {
+    const rng = seededRand(seed);
+    let d = `M0,0`;
+    const segH = 180 / segments;
+    let x = 0;
+    let dir = rng() > 0.5 ? 1 : -1; // initial direction
+    for (let i = 0; i < segments; i++) {
+      const y0 = -i * segH;
+      const y1 = -(i + 1) * segH;
+      // Varying amplitude: some curves big, some small
+      const amp = 15 + rng() * 30; // 15 to 45
+      const cp1x = x + dir * amp;
+      const cp1y = y0 - segH * (0.2 + rng() * 0.3);
+      const cp2x = x + dir * amp * (0.3 + rng() * 0.7);
+      const cp2y = y1 + segH * (0.1 + rng() * 0.3);
+      // End point drifts a bit
+      const endX = x + dir * (rng() * 10 - 5);
+      d += ` C${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${endX.toFixed(1)},${y1.toFixed(1)}`;
+      x = endX;
+      // Flip direction, but occasionally keep same for variation
+      dir = rng() > 0.2 ? -dir : dir;
+    }
+    return { d, endX: x };
+  }
+
+  // Draw snakes: head (from) is at top, tail (to) is at bottom
   for (const [from, to] of Object.entries(S.snakes)) {
-    const p1 = tileToPixel(+from), p2 = tileToPixel(+to);
-    drawCurve(p1, p2, 'rgba(244,63,94,0.5)', 3);
-  }
-  // Draw ladder lines
-  for (const [from, to] of Object.entries(S.ladders)) {
-    const p1 = tileToPixel(+from), p2 = tileToPixel(+to);
-    drawCurve(p1, p2, 'rgba(16,185,129,0.5)', 3);
-  }
-}
+    const pHead = tileToPixel(+from);
+    const pTail = tileToPixel(+to);
+    const dx = pHead.x - pTail.x;
+    const dy = pHead.y - pTail.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dx, -dy) * (180 / Math.PI);
+    const variant = getSnakeVariant(from, to);
+    const c = SNAKE_COLORS[variant];
+    const scaleY = dist / TEMPLATE_HEIGHT;
+    const scaleX = Math.min(0.5, 0.3 + scaleY * 0.1);
 
-function drawCurve(p1, p2, color, width) {
-  const mx = (p1.x + p2.x) / 2 + (Math.random() - 0.5) * 20;
-  const my = (p1.y + p2.y) / 2;
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', `M${p1.x},${p1.y} Q${mx},${my} ${p2.x},${p2.y}`);
-  path.setAttribute('stroke', color);
-  path.setAttribute('stroke-width', width);
-  path.setAttribute('fill', 'none');
-  path.setAttribute('stroke-linecap', 'round');
-  path.setAttribute('stroke-dasharray', '6,4');
-  svgEl.appendChild(path);
+    const seed = +from * 137 + +to * 31;
+    const numSegments = 4 + Math.floor(seededRand(seed + 99)() * 4); // 4-7 segments
+    const { d: bodyPath, endX: headX } = makeSnakePath(seed, numSegments);
+
+    // Build spots along the path at varying positions
+    const rng2 = seededRand(seed + 777);
+    let spots = '';
+    for (let s = 0; s < numSegments - 1; s++) {
+      const sy = -(s + 0.5) * (180 / numSegments);
+      const sx = (rng2() - 0.5) * 20;
+      const rx = 3 + rng2() * 2;
+      const ry = 2 + rng2() * 1.5;
+      spots += `<ellipse cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${c.spot}" opacity="0.8"/>`;
+    }
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${pTail.x},${pTail.y}) rotate(${angle}) scale(${scaleX},${scaleY})`);
+    g.setAttribute('opacity', '0.9');
+    g.innerHTML = `
+      <path d="${bodyPath}" stroke="${c.outline}" stroke-width="14" fill="none" stroke-linecap="round" opacity="0.3"/>
+      <path d="${bodyPath}" stroke="${c.body}" stroke-width="12" fill="none" stroke-linecap="round"/>
+      ${spots}
+      <ellipse cx="${headX.toFixed(1)}" cy="-185" rx="9" ry="7" fill="${c.body}"/>
+      <ellipse cx="${headX.toFixed(1)}" cy="-185" rx="9" ry="7" fill="${c.outline}" opacity="0.15"/>
+      <circle cx="${(headX - 4).toFixed(1)}" cy="-188" r="3" fill="${c.eye}"/>
+      <circle cx="${(headX + 4).toFixed(1)}" cy="-188" r="3" fill="${c.eye}"/>
+      <circle cx="${(headX - 4).toFixed(1)}" cy="-189" r="1.5" fill="${c.pupil}"/>
+      <circle cx="${(headX + 4).toFixed(1)}" cy="-189" r="1.5" fill="${c.pupil}"/>
+      <path d="M${headX.toFixed(1)},-192 L${headX.toFixed(1)},-198 L${(headX - 3).toFixed(1)},-201 M${headX.toFixed(1)},-198 L${(headX + 3).toFixed(1)},-201" stroke="#ef4444" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+    `;
+    svgEl.appendChild(g);
+  }
+
+  // Draw ladders inline — wide rails with rungs, like a real board game
+  for (const [from, to] of Object.entries(S.ladders)) {
+    const pBottom = tileToPixel(+from);
+    const pTop = tileToPixel(+to);
+    const dx = pTop.x - pBottom.x;
+    const dy = pTop.y - pBottom.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dx, -dy) * (180 / Math.PI);
+    const variant = getLadderVariant(from, to);
+    const c = LADDER_COLORS[variant];
+
+    // Scale: stretch length to fit, keep width proportional but wide
+    const scaleY = dist / TEMPLATE_HEIGHT;
+    const scaleX = Math.max(0.5, Math.min(0.8, 0.5 + scaleY * 0.12));
+
+    // Ladder template: rails at ±14, rungs connecting them
+    const railW = 14; // half-width of ladder
+    const numRungs = Math.max(3, Math.min(8, Math.round(dist / 30)));
+    let rungs = '';
+    for (let r = 0; r < numRungs; r++) {
+      const y = -10 - r * ((180 - 20) / (numRungs - 1 || 1));
+      // Rung shadow
+      rungs += `<line x1="${-railW}" y1="${y + 1.5}" x2="${railW}" y2="${y + 1.5}" stroke="${c.rungDark}" stroke-width="5" stroke-linecap="round"/>`;
+      // Rung
+      rungs += `<line x1="${-railW}" y1="${y}" x2="${railW}" y2="${y}" stroke="${c.rung}" stroke-width="4.5" stroke-linecap="round"/>`;
+    }
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${pBottom.x},${pBottom.y}) rotate(${angle}) scale(${scaleX},${scaleY})`);
+    g.setAttribute('opacity', '0.85');
+    g.innerHTML = `
+      <!-- Rail shadows -->
+      <line x1="${-railW}" y1="2" x2="${-railW - 2}" y2="-182" stroke="${c.railDark}" stroke-width="7" stroke-linecap="round"/>
+      <line x1="${railW}" y1="2" x2="${railW + 2}" y2="-182" stroke="${c.railDark}" stroke-width="7" stroke-linecap="round"/>
+      <!-- Rails -->
+      <line x1="${-railW}" y1="2" x2="${-railW - 2}" y2="-182" stroke="${c.rail}" stroke-width="6" stroke-linecap="round"/>
+      <line x1="${railW}" y1="2" x2="${railW + 2}" y2="-182" stroke="${c.rail}" stroke-width="6" stroke-linecap="round"/>
+      <!-- Rungs -->
+      ${rungs}
+    `;
+    svgEl.appendChild(g);
+  }
 }
 
 function updateToken() {
