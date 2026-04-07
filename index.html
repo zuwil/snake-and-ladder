@@ -547,8 +547,17 @@ canvas.chart{width:100%;height:120px;border-radius:6px;background:var(--surface2
 
       <div class="tutorial-step">
         <div class="tutorial-step-title"><span class="tutorial-step-num">1</span> Configure Your Board</div>
-        <p>Use the <span class="highlight">left panel</span> to set board size, rewards quantity, target rewards per run, and target average rolls.</p>
-        <p>Click <span class="highlight">"Apply Settings &amp; Generate Board"</span> to generate the board with auto-placed snakes, ladders, and rewards. A simulation runs automatically.</p>
+        <p>Use the <span class="highlight">left panel</span> to adjust settings, then click <span class="highlight">"Apply Settings &amp; Generate Board"</span> to generate. A simulation runs automatically.</p>
+        <table class="tutorial-table">
+          <tr><th>Setting</th><th>How it works</th></tr>
+          <tr><td><span class="highlight">Board Width</span></td><td>Number of columns (3&ndash;20). Combined with height to determine total tiles (width &times; height).</td></tr>
+          <tr><td><span class="highlight">Board Height</span></td><td>Number of rows (3&ndash;20). A 10&times;10 board = 100 tiles. Larger boards mean longer games.</td></tr>
+          <tr><td><span class="highlight">Rewards Quantity</span></td><td>How many reward tiles (0&ndash;50) are placed on the board. Rewards are spread out with no two adjacent to each other.</td></tr>
+          <tr><td><span class="highlight">Target Rewards Per Run</span></td><td>The desired median number of rewards a player collects per game. The system places rewards in positions that make this target achievable.</td></tr>
+          <tr><td><span class="highlight">Target Avg Rolls</span></td><td>The desired median rolls to finish the game. The algorithm auto-calculates how many snakes and ladders to place (and how far they send you) to hit this target.</td></tr>
+          <tr><td><span class="highlight">Simulation Sample Size</span></td><td>How many complete games to simulate (1K&ndash;2M). Higher values give more accurate statistics but take longer to run.</td></tr>
+        </table>
+        <p style="margin-top:8px;margin-left:32px"><span class="highlight">Export / Import</span> &mdash; save your board layout as a .json file or load a previously saved one.</p>
       </div>
 
       <div class="tutorial-step">
